@@ -1,0 +1,14 @@
+package modelo;
+
+public enum Evento {
+    NUEVA_RONDA,
+    ROBAR_MAZO,
+    ROBAR_DESCARTE,
+    DESCARTAR,
+    BAJAR_COMBINACION,
+    AGREGAR_A_COMBINACION,
+    PUNTAJE_ACTUALIZADO,
+    JUGADOR_ELIMINADO;
+}
+
+
