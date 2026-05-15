@@ -36,7 +36,9 @@ public class Rummy extends ObservableRemoto implements IRummy {
         //Arranca vacio
     }
 
+ 
     private final List<String> jugadoresConectados = new ArrayList<>();
+
 
     @Override
     public List<Jugador> getJugadores() throws RemoteException{ return jugadores; }
@@ -46,6 +48,7 @@ public class Rummy extends ObservableRemoto implements IRummy {
         // SI SE CARGÓ UNA PARTIDA, SOLO DEJA ENTRAR A LOS QUE YA ESTABAN
         if (partidaCargada) {
             for (Jugador j : jugadores) {
+
                 if (j.getNombre().equalsIgnoreCase(nombre)) {
                     // Lo anota como conectado
                     if (!jugadoresConectados.contains(nombre)) {
@@ -53,11 +56,17 @@ public class Rummy extends ObservableRemoto implements IRummy {
                     }
                     return true;
                 }
+
+                if (j.getNombre().equalsIgnoreCase(nombre)) return true;
+
             }
             return false;
         }
 
+
         // LÓGICA PARA PARTIDAS NUEVAS:
+
+        // LÓGICA ORIGINAL:
         if (jugadores.size() >= MAX_JUGADORES) return false;
         AdminJugadores admin = AdminJugadores.getInstance();
         admin.agregarJugador(nombre);
