@@ -1,11 +1,16 @@
 package modelo;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 
-public class Mazo {
+public class Mazo implements Serializable{
+
+    private static final long serialVersionUID = 1L;
+
+
     //Necesito una lista para almacenar las cartas (mazo)
     private final List<Carta> cartas = new ArrayList<>();
 

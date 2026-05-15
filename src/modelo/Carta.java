@@ -1,6 +1,10 @@
 package modelo;
 
-public class Carta {
+import java.io.Serializable;
+
+public class Carta implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final Valor valor;
     private final Palo palo;

@@ -1,11 +1,17 @@
 package modelo;
 
+import serializacion.AdminJugadores;
+import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Rummy implements Observable {
+import ar.edu.unlu.rmimvc.observer.ObservableRemoto;
+
+public class Rummy extends ObservableRemoto implements IRummy {
+
 
     private final List<Jugador> jugadores = new ArrayList<>();
+    private static final int MAX_JUGADORES = 4;
     private Mazo mazo;
     private PilaDescarte descarte;
 
@@ -15,38 +21,64 @@ public class Rummy implements Observable {
     // Límite de puntos (modo límite)
     private int limitePuntos = 0;
 
+    //Si es una partida cargada
+    private boolean partidaCargada = false;
+
+    private int turnoActual = 0;
+
     // Combinaciones en mesa
     private final List<Combinacion> tapete = new ArrayList<>();
 
-    // Observadores
-    private final List<Observador> observadores = new ArrayList<>();
-
-    @Override
-    public void enlazarObservador(Observador o) {
-        if (o != null) observadores.add(o);
-    }
-
-    @Override
-    public void notificar(Evento evento) {
-        for (Observador o : observadores) {
-            o.actualizarRummy(this, evento);
-        }
-    }
 
     // ================= CONSTRUCTOR =================
 
-    public Rummy(List<String> nombresJugadores) {
-        for (String nombre : nombresJugadores) {
-            jugadores.add(new Jugador(nombre));
-        }
+    public Rummy() {
+        //Arranca vacio
     }
 
-    public List<Jugador> getJugadores() { return jugadores; }
 
-    public int getNumeroRonda() { return numeroRonda; }
+    @Override
+    public List<Jugador> getJugadores() throws RemoteException{ return jugadores; }
 
+    @Override
+    public synchronized boolean registrarJugador(String nombre) throws RemoteException {
+        // SI SE CARGÓ UNA PARTIDA, SOLO DEJA ENTRAR A LOS QUE YA ESTABAN
+        if (partidaCargada) {
+            for (Jugador j : jugadores) {
+                if (j.getNombre().equalsIgnoreCase(nombre)) return true;
+            }
+            return false;
+        }
+
+        // LÓGICA ORIGINAL:
+        if (jugadores.size() >= MAX_JUGADORES) return false;
+        AdminJugadores admin = AdminJugadores.getInstance();
+        admin.agregarJugador(nombre);
+        Jugador jugadorReal = admin.getJugador(nombre);
+
+        if (jugadores.contains(jugadorReal)) return false;
+
+        jugadores.add(jugadorReal);
+        return true;
+    }
+
+    @Override
+    public synchronized boolean partidaLista() throws RemoteException {
+        return jugadores.size() >= 2 && jugadores.size() <= MAX_JUGADORES;
+    }
+
+    @Override
+    public int getNumeroRonda() throws RemoteException{ return numeroRonda; }
+
+    @Override
     public void setLimitePuntos(int limitePuntos) { this.limitePuntos = limitePuntos; }
 
+    @Override
+    public int getLimitePuntos() throws RemoteException {
+        return this.limitePuntos;
+    }
+
+    @Override
     public List<Combinacion> getTapete() { return tapete; }
 
     // ============================================================
@@ -61,11 +93,13 @@ public class Rummy implements Observable {
     }
 
 
-    public void iniciarNuevaRonda() {
+    @Override
+    public void iniciarNuevaRonda() throws RemoteException {
         numeroRonda++;
         tapete.clear();
+        this.turnoActual = 0;
 
-        // Reiniciar estados de ronda (NUEVO)
+        // Reiniciar estados de ronda
         reiniciarEstadoEnRonda();
 
         // Vaciar manos
@@ -92,7 +126,8 @@ public class Rummy implements Observable {
             descarte.descartar(primera);
         }
 
-        notificar(Evento.NUEVA_RONDA);
+        notificarObservadores(Evento.NUEVA_RONDA);
+        autoGuardar();
     }
 
 
@@ -100,34 +135,67 @@ public class Rummy implements Observable {
     //                     ACCIONES DE TURNO
     // ============================================================
 
-    public Carta getCartaDescarteSuperior() {
+    @Override
+    public Carta getCartaDescarteSuperior() throws RemoteException{
         return descarte.verSuperior();
     }
 
-    public boolean descarteEstaVacio() {
+    @Override
+    public boolean descarteEstaVacio() throws RemoteException{
         return descarte.estaVacia();
     }
 
-    public void robarDelMazo(Jugador jugador) {
+    @Override
+    public Carta robarDelMazo(Jugador jugador) throws RemoteException {
         regenerarMazoSiEsNecesario();
-        jugador.getMano().robarDelMazo(mazo);
-        notificar(Evento.ROBAR_MAZO);
+        //Buscamos al jugador en la lista local del servidor
+        for (Jugador j : jugadores) {
+            if (j.getNombre().equals(jugador.getNombre())) {
+                // Le damos la carta a ESTA instancia (la real)
+                Carta c = j.getMano().robarDelMazo(mazo);
+                notificarObservadores(Evento.ROBAR_MAZO);
+                autoGuardar();
+                return c; // Devolvemos la carta para que el controlador la muestre
+            }
+        }
+        return null;
     }
 
-    public void robarDeDescarte(Jugador jugador) {
-        Carta c = descarte.tomarSuperior();
-        if (c != null) jugador.agregarCarta(c);
-        notificar(Evento.ROBAR_DESCARTE);
+    @Override
+    public void robarDeDescarte(Jugador jugador) throws RemoteException {
+        //Buscamos al jugador real
+        for (Jugador j : jugadores) {
+            if (j.getNombre().equals(jugador.getNombre())) {
+                Carta c = descarte.tomarSuperior();
+                if (c != null) j.agregarCarta(c);
+                notificarObservadores(Evento.ROBAR_DESCARTE);
+                autoGuardar();
+                return;
+            }
+        }
     }
 
-    public void descartar(Jugador jugador, int indiceCarta) {
-        if (indiceCarta < 0 || indiceCarta >= jugador.getMano().size()) return;
 
-        Carta c = jugador.quitarCarta(indiceCarta);
+    @Override
+    public boolean descartar(Jugador jugador, int indiceCarta) throws RemoteException {
+        for (int i = 0; i < jugadores.size(); i++) {
+            Jugador j = jugadores.get(i);
+            if (j.getNombre().equals(jugador.getNombre())) {
+                // SI EL ÍNDICE ES INVÁLIDO, AVISA QUE FALLÓ
+                if (indiceCarta < 0 || indiceCarta >= j.getMano().size()) return false;
 
-        if (c != null) descarte.descartar(c);
+                Carta c = j.quitarCarta(indiceCarta);
+                if (c != null) descarte.descartar(c);
 
-        notificar(Evento.DESCARTAR);
+                notificarObservadores(Evento.DESCARTAR);
+
+                // AVANZA EL TURNO Y GUARDO
+                this.turnoActual = (i + 1) % jugadores.size();
+                autoGuardar();
+                return true;
+            }
+        }
+        return false;
     }
 
     // ============================================================
@@ -145,11 +213,23 @@ public class Rummy implements Observable {
     //                     PUNTAJE / ELIMINACIÓN
     // ============================================================
 
-    public void puntuarPerdedores(Jugador ganador) {
+    @Override
+    public void puntuarPerdedores(Jugador ganador) throws RemoteException {
+        // 1. Busco al ganador REAL en la lista del servidor para ver sus flags (si hizo Rummy POR EJ)
+        Jugador ganadorReal = null;
+        for (Jugador j : jugadores) {
+            if (j.getNombre().equals(ganador.getNombre())) {
+                ganadorReal = j;
+                break;
+            }
+        }
+        if (ganadorReal == null) return; // Seguridad
+
         for (Jugador j : jugadores) {
 
             if (!esJugadorActivo(j)) continue;
-            if (j == ganador) continue;
+            // Uso referencia directa porque ambos objetos vienen de la misma lista ahora
+            if (j == ganadorReal) continue;
 
             int puntos = 0;
 
@@ -157,22 +237,26 @@ public class Rummy implements Observable {
                 puntos += c.getPuntos();
             }
 
-            if (ganador.hizoRummyEnEstaRonda()) {
+            if (ganadorReal.hizoRummyEnEstaRonda()) {
                 puntos *= 2;
             }
 
             j.sumarPuntos(puntos);
         }
-
-        notificar(Evento.PUNTAJE_ACTUALIZADO);
+        // Guardo los cambios en el archivo
+        AdminJugadores.getInstance().actualizar();
+        notificarObservadores(Evento.PUNTAJE_ACTUALIZADO);
     }
 
-    public boolean esJugadorActivo(Jugador j) {
+
+    @Override
+    public boolean esJugadorActivo(Jugador j) throws RemoteException{
         if (limitePuntos == 0) return true;
         return !j.estaEliminado();
     }
 
-    public int getCantidadJugadoresActivos() {
+    @Override
+    public int getCantidadJugadoresActivos() throws RemoteException{
         int contador = 0;
         for (Jugador j : jugadores) {
             if (!j.estaEliminado()) contador++;
@@ -180,14 +264,16 @@ public class Rummy implements Observable {
         return contador;
     }
 
-    public Jugador getUltimoJugadorActivo() {
+    @Override
+    public Jugador getUltimoJugadorActivo() throws RemoteException{
         for (Jugador j : jugadores) {
             if (esJugadorActivo(j)) return j;
         }
         return null;
     }
 
-    public List<Jugador> getJugadoresEliminadosPorPuntos() {
+    @Override
+    public List<Jugador> getJugadoresEliminadosPorPuntos() throws RemoteException{
         List<Jugador> jugadoresFuera = new ArrayList<>();
         if (limitePuntos == 0) return jugadoresFuera;
 
@@ -197,43 +283,111 @@ public class Rummy implements Observable {
         return jugadoresFuera;
     }
 
-    // Metodo para eliminar un jugador
-    public void eliminarJugador(Jugador j) {
-        j.eliminar();
-        notificar(Evento.JUGADOR_ELIMINADO);
+    @Override
+    public void eliminarJugador(Jugador j) throws RemoteException {
+        //Busco al real para eliminarlo
+        for (Jugador jugadorReal : jugadores) {
+            if (jugadorReal.getNombre().equals(j.getNombre())) {
+                jugadorReal.eliminar();
+                break;
+            }
+        }
+        notificarObservadores(Evento.JUGADOR_ELIMINADO);
     }
 
     // ============================================================
     //                     COMBINACIONES
     // ============================================================
 
-    public boolean bajarCombinacion(Jugador jugador, List<Integer> indices) {
+    @Override
+    public boolean bajarCombinacion(Jugador jugador, List<Integer> indices) throws RemoteException {
+        //Busco al jugador real
+        for (Jugador j : jugadores) {
+            if (j.getNombre().equals(jugador.getNombre())) {
+                Combinacion comb = j.bajarCombinacion(indices);
 
-        Combinacion comb = jugador.bajarCombinacion(indices);
+                if (comb == null) return false;
 
-        if (comb == null) return false;
+                tapete.add(comb);
 
-        tapete.add(comb);
+                // Detecto Rummy sobre la instancia real
+                if (j.sinCartas() && !j.yaBajoEnEstaRonda()) {
+                    j.marcarRummy();
+                }
 
-        //Esto detecta si hizo rummy
-        if (jugador.sinCartas() && !jugador.yaBajoEnEstaRonda()) {
-            jugador.marcarRummy();
+                notificarObservadores(Evento.BAJAR_COMBINACION);
+                autoGuardar();
+                return true;
+            }
         }
-
-        notificar(Evento.BAJAR_COMBINACION);
-        return true;
+        return false;
     }
 
-    public boolean agregarCartaACombinacion(Jugador jugador, int indiceCombinacion, int indiceCarta) {
+    @Override
+    public boolean agregarCartaACombinacion(Jugador jugador, int indiceCombinacion, int indiceCarta) throws RemoteException {
 
         if (indiceCombinacion < 0 || indiceCombinacion >= tapete.size()) return false;
 
         Combinacion comb = tapete.get(indiceCombinacion);
 
-        boolean ok = jugador.agregarCartaA(comb, indiceCarta);
+        //Busco al jugador real
+        for (Jugador j : jugadores) {
+            if (j.getNombre().equals(jugador.getNombre())) {
+                boolean ok = j.agregarCartaA(comb, indiceCarta);
+                if (ok) notificarObservadores(Evento.AGREGAR_A_COMBINACION);
+                autoGuardar();
+                return ok;
+            }
+        }
+        return false;
+    }
 
-        if (ok) notificar(Evento.AGREGAR_A_COMBINACION);
+    //SECCION DE GUARDADO DE PARTIDA
 
-        return ok;
+    @Override
+    public boolean esPartidaCargada() throws RemoteException {
+        return this.partidaCargada;
+    }
+
+    public void cargarEstado() {
+        serializacion.Serializador s = new serializacion.Serializador("partida_guardada.dat");
+        Object obj = s.readFirstObject();
+        if (obj instanceof serializacion.EstadoPartida estado) {
+            this.jugadores.clear();
+            this.jugadores.addAll(estado.jugadores);
+            this.mazo = estado.mazo;
+            this.descarte = estado.descarte;
+            this.numeroRonda = estado.numeroRonda;
+            this.limitePuntos = estado.limitePuntos;
+            this.tapete.clear();
+            this.tapete.addAll(estado.tapete);
+            this.turnoActual = estado.turnoActual;
+            this.partidaCargada = true;
+        }
+    }
+
+    @Override
+    public void guardarEstado() throws RemoteException {
+        serializacion.EstadoPartida estado = new serializacion.EstadoPartida(
+                new ArrayList<>(jugadores),
+                mazo,
+                descarte,
+                numeroRonda,
+                limitePuntos,
+                new ArrayList<>(tapete),
+                this.turnoActual
+        );
+        serializacion.Serializador s = new serializacion.Serializador("partida_guardada.dat");
+        s.writeOneObject(estado);
+    }
+
+    private void autoGuardar() {
+        try { guardarEstado(); } catch (Exception ignored) {}
+    }
+
+
+    @Override
+    public int getTurnoActual() throws RemoteException {
+        return this.turnoActual;
     }
 }

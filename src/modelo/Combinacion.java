@@ -1,11 +1,12 @@
 package modelo;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class Combinacion {
-
+public class Combinacion implements Serializable {
+    private static final long serialVersionUID = 1L;
     private final List<Carta> cartas = new ArrayList<>();
 
     // -------------------------------------------------------
@@ -49,7 +50,7 @@ public class Combinacion {
         // Marcar que bajó
         jugador.marcarBajoCombinacion();
 
-        // ¿Hizo Rummy?
+        // Hizo Rummy?
         if (jugador.sinCartas() && !jugador.yaBajoEnEstaRonda()) {
             jugador.marcarRummy();
         }
@@ -114,7 +115,7 @@ public class Combinacion {
         List<Carta> ordenadas = new ArrayList<>(cartas);
         ordenadas.sort((a, b) -> a.getValor().ordinal() - b.getValor().ordinal());
 
-        // ¿Consecutiva normal?
+        // Consecutiva normal
         boolean consecutiva = true;
         for (int i = 0; i < ordenadas.size() - 1; i++) {
             int v1 = ordenadas.get(i).getValor().ordinal();
@@ -126,7 +127,7 @@ public class Combinacion {
         }
         if (consecutiva) return true;
 
-        // ¿Caso AS al final?
+        // Caso AS al final
         Carta as = null;
         for (Carta c : ordenadas) {
             if (c.getValor().name().equals("AS")) {

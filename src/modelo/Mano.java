@@ -1,9 +1,11 @@
 package modelo;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Mano {
+public class Mano implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     private final List<Carta> cartas = new ArrayList<>();
 
