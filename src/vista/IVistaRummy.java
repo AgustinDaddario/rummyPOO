@@ -1,13 +1,17 @@
 package vista;
 
 import java.util.List;
+
+import controlador.Controlador;
 import modelo.Carta;
 import modelo.Combinacion;
+import modelo.Evento;
 import modelo.Jugador;
 
 public interface IVistaRummy {
+    void iniciar();
 
-    String pedirNombreJugador(int numero);
+    String pedirNombreJugador(int var1);
 
     int pedirModoDeJuego();
 
@@ -15,30 +19,33 @@ public interface IVistaRummy {
 
     int pedirLimiteDePuntos();
 
-    int pedirOpcionRobo(Jugador jugador);
+    int pedirOpcionRobo(Jugador var1);
 
-    int pedirIndiceCartaADescartar(Jugador jugador);
+    int pedirIndiceCartaADescartar(Jugador var1);
 
-    void mostrarEstadoJugador(Jugador jugador);
+    void mostrarEstadoJugador(Jugador var1);
 
-    void mostrarCartaDescarteActual(Carta carta);
+    void mostrarCartaDescarteActual(Carta var1);
 
-    void mostrarMensaje(String msg);
+    void mostrarMensaje(String var1);
 
-    void mostrarGanadorRonda(Jugador ganador);
+    void mostrarGanadorRonda(Jugador var1);
 
-    void mostrarGanadorFinal(Jugador ganador);
+    void mostrarGanadorFinal(Jugador var1);
 
-    List<Integer> pedirIndicesCombinacion(Jugador jugador);
+    List<Integer> pedirIndicesCombinacion(Jugador var1);
 
-    int pedirCombinacionATocar(List<Combinacion> tapete);
+    int pedirCombinacionATocar(List<Combinacion> var1);
 
-    int pedirCartaParaAgregar(Jugador jugador);
+    int pedirCartaParaAgregar(Jugador var1);
 
-    boolean pedirReenganche(Jugador jugador);
+    boolean pedirReenganche(Jugador var1);
 
-    void mostrarTapete(List<Combinacion> tapete);
+    void mostrarTapete(List<Combinacion> var1);
 
     int leerEnteroSimple();
 
+    void actualizar(Evento evento);
+
+    void setControlador(Controlador controlador);
 }

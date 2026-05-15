@@ -1,9 +1,12 @@
 package modelo;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Jugador {
+public class Jugador implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     //Atributos
     private final String nombre;
